@@ -7,102 +7,99 @@ using UnityEngine;
 
 namespace Group8.Gameplay
 {
-    public class Flow : UpdatableBaseObject
+    public class Flow : BaseObject
     {
         private LineRenderer lineRenderer = null;
-        private ParticleSystem particleSystem = null;
-        [SerializeField] private float lineAnimateSpeed = 1.75f;
+        private ParticleSystem splashParticle = null;
 
-        private Coroutine pouringRoutine = null;
+        private Coroutine pourRoutine = null;
         private Vector3 targetPosition = Vector3.zero;
-        private bool isPouring = false;
 
 
-        public override void BaseObjectAwake()
+        private void Awake()
         {
             lineRenderer = GetComponent<LineRenderer>();
-            particleSystem = GetComponentInChildren<ParticleSystem>();
+            splashParticle = GetComponentInChildren<ParticleSystem>();
         }
 
-        public override void BaseObjectStart()
+        private void Start()
         {
-            MoveLineToPosition(0, transform.position);
-            MoveLineToPosition(1, transform.position);
-            
-            //Debug.Log(FindEndPoint());
-        }
-
-        public override void BaseObjectUpdate()
-        {
-            if (Input.GetKey(KeyCode.A) && !isPouring)
-            {
-                Begin();
-                isPouring = false;
-            }
-            else if (isPouring)
-            {
-                End();
-            }
+            MoveToPosition(0, transform.position);
+            MoveToPosition(1, transform.position);
         }
 
         public void Begin()
         {
             StartCoroutine(UpdateParticle());
-            pouringRoutine = StartCoroutine(BeginPouring());
+            pourRoutine = StartCoroutine(BeginPour());
         }
 
-        public void End()
-        {
-            StopCoroutine(pouringRoutine);
-            pouringRoutine = StartCoroutine(EndPouring());
-        }
-
-        private IEnumerator BeginPouring()
+        private IEnumerator BeginPour()
         {
             while (gameObject.activeSelf)
             {
                 targetPosition = FindEndPoint();
-                MoveLineToPosition(0, transform.position);
-                MoveLineToPosition(1, targetPosition, true);
+                MoveToPosition(0, transform.position);
+                AnimateToPosition(1, targetPosition);
                 yield return null;
             }
         }
 
-        private IEnumerator EndPouring()
+        public void End()
         {
-            while (true)
+            StopCoroutine(pourRoutine);
+            pourRoutine = StartCoroutine(EndPour());
+        }
+
+        private IEnumerator EndPour()
+        {
+            while (!HasReachedPosition(0, targetPosition))
             {
+                AnimateToPosition(0, targetPosition);
+                AnimateToPosition(1, targetPosition);
                 yield return null;
             }
+
+            Destroy(gameObject);
+        }
+
+        private Vector3 FindEndPoint()
+        {
+            RaycastHit hit;
+            Ray ray = new Ray(transform.position, Vector3.down);
+            Physics.Raycast(ray, out hit);
+            Vector3 endPoint = hit.collider ? hit.point : ray.GetPoint(0.5f);
+            return endPoint;
+        }
+
+        private void MoveToPosition(int index, Vector3 position)
+        {
+            lineRenderer.SetPosition(index, targetPosition);
+        }
+
+        private void AnimateToPosition(int index, Vector3 targetPosition)
+        {
+            Vector3 currentPoint = lineRenderer.GetPosition(index);
+            Vector3 newPosition = Vector3.MoveTowards(currentPoint, targetPosition, Time.deltaTime * 1.75f);
+            lineRenderer.SetPosition(index, newPosition);
+        }
+
+        private bool HasReachedPosition(int index, Vector3 targetPosition)
+        {
+            Vector3 currentPosition = lineRenderer.GetPosition(index);
+            return currentPosition == targetPosition;
         }
 
         private IEnumerator UpdateParticle()
         {
             while (gameObject.activeSelf)
             {
-                particleSystem.gameObject.transform.position = targetPosition;
-                
-                particleSystem.gameObject.SetActive(IsHittedGround(1, targetPosition));
+                splashParticle.gameObject.transform.position = targetPosition;
+
+                bool isHitting = HasReachedPosition(1, targetPosition);
+                splashParticle.gameObject.SetActive(isHitting);
                 yield return null;
             }
-        }
-        
-        private Vector3 FindEndPoint()
-        {
-            RaycastHit hit;
-            Physics.Raycast(transform.position, Vector3.down, out hit);
-            return hit.collider ? hit.point : (transform.position + Vector3.down) * 2f;
-        }
-
-        private void MoveLineToPosition(int index, Vector3 position, bool isAnimated = false)
-        {
-            Vector3 currentPoint = lineRenderer.GetPosition(index);
-            lineRenderer.SetPosition(index, isAnimated ? Vector3.MoveTowards(currentPoint, position, Time.deltaTime * lineAnimateSpeed): position);
-        }
-
-        private bool IsHittedGround(int index, Vector3 targetPosition)
-        {
-            return lineRenderer.GetPosition(index) == targetPosition;
         }
     }
 }
